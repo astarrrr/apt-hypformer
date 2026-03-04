@@ -1,0 +1,99 @@
+_include_yml: default
+
+construction:
+  used_method: default
+  use_all_files: True
+  mimicry_edge_num: 0
+  # time_window_size: 30.0
+  time_window_size: 99999999.0      # Very large -> all events in one window -> full provenance graph
+  use_hashed_label: False
+  fuse_edge: True
+  multi_dataset: none
+  node_label_features:
+    subject: type, path, cmd_line
+    file: type, path
+    netflow: type, remote_ip, remote_port
+
+transformation:
+  used_methods: none
+
+featurization:
+  emb_dim: 128
+  epochs: 50
+  training_split: train
+  use_seed: True
+  used_method: word2vec
+  word2vec:
+    alpha: 0.025
+    window_size: 5
+    min_count: 1
+    use_skip_gram: True
+    num_workers: 1
+    compute_loss: True
+    negative: 5
+    decline_rate: 30
+feat_inference:
+  to_remove: True
+
+batching:
+  save_on_disk: False
+  node_features: node_emb,node_type
+  edge_features: edge_type
+  fix_buggy_graph_reindexer: False
+  global_batching:
+    used_method: none
+  intra_graph_batching:
+    used_methods: edges
+    edges:
+      intra_graph_batch_size: 4096   # Edges per batch (tune for GPU memory)
+  inter_graph_batching:
+    used_method: none
+
+training:
+  used_method: default
+  use_seed: True
+  deterministic: False
+  num_epochs: 20
+  patience: 5
+  lr: 0.0001
+  weight_decay: 0.00001
+  hyp_lr: 0.0001
+  hyp_weight_decay: 0.0
+  node_hid_dim: 256
+  node_out_dim: 128
+  grad_accumulation: 1
+  encoder:
+    dropout: 0.5
+    used_methods: hyperbolic_transformer
+    hyperbolic_transformer:
+      trans_num_layers: 2
+      trans_num_heads: 4
+      trans_dropout: 0.3
+      gnn_num_layers: 2
+      gnn_dropout: 0.3
+      graph_weight: 0.0
+      k: 1.0
+      attention_type: linear_focused  # O(n) complexity, suitable for large batches
+      power_k: 2
+      use_bn: true
+      use_residual: true
+  decoder:
+    used_methods: predict_edge_type
+    predict_edge_type:
+      decoder: edge_mlp
+      use_triplet_types: False
+      edge_mlp:
+        architecture_str: linear(0.5) | relu
+        src_dst_projection_coef: 2
+    use_few_shot: False
+
+evaluation:
+  viz_malicious_nodes: False
+  ground_truth_version: orthrus
+  best_model_selection: best_adp
+  used_method: node_evaluation
+  node_evaluation:
+    threshold_method: max_val_loss
+    use_dst_node_loss: True
+    use_kmeans: True
+    kmeans_top_K: 30
