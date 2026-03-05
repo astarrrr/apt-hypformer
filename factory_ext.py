@@ -8,6 +8,7 @@ Provides three factory functions:
 
 import sys
 import os
+import atexit
 
 # Ensure myproject is FIRST on the path (PIDSMaker/pidsmaker/ also has
 # encoders/, decoders/, etc. and sits at sys.path[0] when run via
@@ -21,6 +22,28 @@ from encoders.hyp_transformer_encoder import HypTransformerEncoder
 from decoders.hyp_edge_decoder import HypEdgeDecoder
 from objectives.hyp_edge_reconstruction import HypEdgeReconstruction
 from optimizer import DualOptimizer
+
+_LAST_HYP_ENCODER = None
+_INITIAL_K = None
+_REGISTERED_K_LOGGER = False
+
+
+def _register_final_k_logger():
+    global _REGISTERED_K_LOGGER
+    if _REGISTERED_K_LOGGER:
+        return
+
+    def _print_final_k():
+        if _LAST_HYP_ENCODER is None or not hasattr(_LAST_HYP_ENCODER, "manifold"):
+            return
+        k = float(_LAST_HYP_ENCODER.manifold.k.detach().cpu().item())
+        if _INITIAL_K is None:
+            print(f"[hyperbolic_transformer] Final learned k={k:.8f}")
+        else:
+            print(f"[hyperbolic_transformer] Final learned k={k:.8f} (delta={k - _INITIAL_K:+.8f})")
+
+    atexit.register(_print_final_k)
+    _REGISTERED_K_LOGGER = True
 
 
 def create_hyp_encoder(cfg, in_dim):
@@ -52,6 +75,11 @@ def create_hyp_encoder(cfg, in_dim):
         use_bn=enc_cfg.use_bn,
         use_residual=enc_cfg.use_residual,
     )
+    global _LAST_HYP_ENCODER
+    global _INITIAL_K
+    _LAST_HYP_ENCODER = encoder
+    _INITIAL_K = float(encoder.manifold.k.detach().cpu().item())
+    _register_final_k_logger()
     return encoder
 
 
@@ -68,9 +96,10 @@ def create_hyp_objective(cfg, node_out_dim):
         HypEdgeReconstruction instance
     """
     enc_cfg = cfg.training.encoder.hyperbolic_transformer
-    k = enc_cfg.k
-
-    manifold = Lorentz(k=float(k))
+    if _LAST_HYP_ENCODER is not None and hasattr(_LAST_HYP_ENCODER, "manifold"):
+        manifold = _LAST_HYP_ENCODER.manifold
+    else:
+        manifold = Lorentz(k=float(enc_cfg.k), learnable=True)
 
     decoder = HypEdgeDecoder(
         manifold=manifold,
@@ -105,6 +134,9 @@ def create_dual_optimizer(cfg, parameters):
     # Use hyperbolic-specific learning rates if available
     hyp_lr = getattr(cfg.training, 'hyp_lr', lr)
     hyp_weight_decay = getattr(cfg.training, 'hyp_weight_decay', 0.0)
+    curvature_params = []
+    if _LAST_HYP_ENCODER is not None and hasattr(_LAST_HYP_ENCODER, "manifold"):
+        curvature_params.append(_LAST_HYP_ENCODER.manifold.k)
 
     return DualOptimizer(
         parameters=parameters,
@@ -112,4 +144,5 @@ def create_dual_optimizer(cfg, parameters):
         hyp_lr=hyp_lr,
         weight_decay=weight_decay,
         hyp_weight_decay=hyp_weight_decay,
+        curvature_params=curvature_params,
     )

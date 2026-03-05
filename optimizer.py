@@ -16,12 +16,23 @@ class DualOptimizer:
     """
 
     def __init__(self, parameters, lr=1e-4, hyp_lr=1e-4,
-                 weight_decay=1e-5, hyp_weight_decay=0.0):
+                 weight_decay=1e-5, hyp_weight_decay=0.0,
+                 curvature_params=None, curvature_min=1e-3, curvature_max=1e3):
         params = list(parameters)
-        euc_params = [p for p in params if not isinstance(p, ManifoldParameter)]
+        curvature_params = list(curvature_params or [])
+        curvature_param_ids = {id(p) for p in curvature_params}
+
+        euc_params = [
+            p for p in params
+            if not isinstance(p, ManifoldParameter) and id(p) not in curvature_param_ids
+        ]
         hyp_params = [p for p in params if isinstance(p, ManifoldParameter)]
 
         self.optimizers = []
+        self.curvature_params = curvature_params
+        self.curvature_min = curvature_min
+        self.curvature_max = curvature_max
+
         if euc_params:
             self.optimizers.append(
                 torch.optim.Adam(euc_params, lr=lr, weight_decay=weight_decay)
@@ -29,6 +40,10 @@ class DualOptimizer:
         if hyp_params:
             self.optimizers.append(
                 RiemannianAdam(hyp_params, lr=hyp_lr, stabilize=10, weight_decay=hyp_weight_decay)
+            )
+        if curvature_params:
+            self.optimizers.append(
+                torch.optim.Adam(curvature_params, lr=hyp_lr, weight_decay=0.0)
             )
 
         # Fallback: if no params at all, create a dummy optimizer
@@ -42,6 +57,10 @@ class DualOptimizer:
     def step(self):
         for opt in self.optimizers:
             opt.step()
+        if self.curvature_params:
+            with torch.no_grad():
+                for p in self.curvature_params:
+                    p.clamp_(self.curvature_min, self.curvature_max)
 
     @property
     def param_groups(self):

@@ -333,7 +333,7 @@ class HypTransformerEncoder(nn.Module):
                  k=1.0, attention_type='linear_focused', power_k=2,
                  use_bn=True, use_residual=True):
         super().__init__()
-        self.manifold = Lorentz(k=float(k))
+        self.manifold = Lorentz(k=float(k), learnable=True)
         self.graph_weight = graph_weight
         self.use_graph = graph_weight > 0.0
 
