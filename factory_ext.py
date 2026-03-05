@@ -18,6 +18,7 @@ if sys.path[0] != _myproject_dir:
 
 from manifolds.lorentz import Lorentz
 from encoders.hyp_transformer_encoder import HypTransformerEncoder
+from encoders.euc_transformer_encoder import EuclideanTransformerEncoder
 from decoders.hyp_edge_decoder import HypEdgeDecoder
 from objectives.hyp_edge_reconstruction import HypEdgeReconstruction
 from optimizer import DualOptimizer
@@ -35,6 +36,23 @@ def create_hyp_encoder(cfg, in_dim):
     hid_dim = cfg.training.node_hid_dim
     out_dim = cfg.training.node_out_dim
     enc_cfg = cfg.training.encoder.hyperbolic_transformer
+    k = float(enc_cfg.k)
+
+    if k <= 0.0:
+        # Baseline mode: reuse the same config section, but run a Euclidean encoder.
+        return EuclideanTransformerEncoder(
+            in_dim=in_dim,
+            hid_dim=hid_dim,
+            out_dim=out_dim,
+            trans_num_layers=enc_cfg.trans_num_layers,
+            trans_num_heads=enc_cfg.trans_num_heads,
+            trans_dropout=enc_cfg.trans_dropout,
+            gnn_num_layers=enc_cfg.gnn_num_layers,
+            gnn_dropout=enc_cfg.gnn_dropout,
+            graph_weight=enc_cfg.graph_weight,
+            use_bn=enc_cfg.use_bn,
+            use_residual=enc_cfg.use_residual,
+        )
 
     encoder = HypTransformerEncoder(
         in_dim=in_dim,
@@ -46,7 +64,7 @@ def create_hyp_encoder(cfg, in_dim):
         gnn_num_layers=enc_cfg.gnn_num_layers,
         gnn_dropout=enc_cfg.gnn_dropout,
         graph_weight=enc_cfg.graph_weight,
-        k=enc_cfg.k,
+        k=k,
         attention_type=enc_cfg.attention_type,
         power_k=enc_cfg.power_k,
         use_bn=enc_cfg.use_bn,
