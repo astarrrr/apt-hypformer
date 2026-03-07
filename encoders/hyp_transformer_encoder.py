@@ -331,9 +331,9 @@ class HypTransformerEncoder(nn.Module):
                  trans_num_layers=2, trans_num_heads=4, trans_dropout=0.3,
                  gnn_num_layers=2, gnn_dropout=0.3, graph_weight=0.5,
                  k=1.0, attention_type='linear_focused', power_k=2,
-                 use_bn=True, use_residual=True):
+                 use_bn=True, use_residual=True, manifold=None):
         super().__init__()
-        self.manifold = Lorentz(k=float(k))
+        self.manifold = manifold if manifold is not None else Lorentz(k=float(k))
         self.graph_weight = graph_weight
         self.use_graph = graph_weight > 0.0
 
@@ -397,7 +397,8 @@ class HypTransformerEncoder(nn.Module):
         else:
             z = x1
 
-        # Output projection
-        h = self.output_proj(z)  # [N, out_dim+1]
+        # Output projection; strip Lorentz time component (index 0) so the
+        # output is Euclidean-compatible [N, out_dim] for standard PIDSMaker decoders.
+        h = self.output_proj(z)[..., 1:]  # [N, out_dim]
 
         return {"h": h}
