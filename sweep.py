@@ -22,7 +22,7 @@ from datetime import datetime
 # Configuration
 # ---------------------------------------------------------------------------
 
-PIDSMAKER_DIR = "/home/astar/projects/PIDSMaker"
+DEFAULT_PIDSMAKER_ROOT = "/home/astar/projects"
 MYPROJECT_DIR = "/home/astar/projects/myproject"
 RESULTS_CSV = "/home/astar/projects/myproject/sweep_results.csv"
 DATASET = "CADETS_E3"
@@ -69,6 +69,29 @@ STAGES = [
 
 # Parameters that require restarting from batching (not just training)
 BATCHING_PARAMS = {"intra_graph_batch_size"}
+
+
+def resolve_pidsmaker_dir():
+    """Resolve the local PIDSMaker checkout, preferring env override."""
+    env_dir = os.environ.get("PIDSMAKER_DIR")
+    if env_dir and os.path.isdir(os.path.join(env_dir, "config")):
+        return env_dir
+
+    for candidate in ("PIDSMaker-hyp", "PIDSMaker"):
+        path = os.path.join(DEFAULT_PIDSMAKER_ROOT, candidate)
+        if os.path.isdir(os.path.join(path, "config")) and os.path.isfile(
+            os.path.join(path, "pidsmaker", "main.py")
+        ):
+            return path
+
+    raise FileNotFoundError(
+        "Could not find PIDSMaker checkout. Set PIDSMAKER_DIR or place the repo at "
+        f"{DEFAULT_PIDSMAKER_ROOT}/PIDSMaker-hyp or "
+        f"{DEFAULT_PIDSMAKER_ROOT}/PIDSMaker."
+    )
+
+
+PIDSMAKER_DIR = resolve_pidsmaker_dir()
 
 
 def _get_env():
