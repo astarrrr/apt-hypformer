@@ -45,7 +45,8 @@ batching:
   intra_graph_batching:
     used_methods: edges
     edges:
-      intra_graph_batch_size: 32768        # Edges per batch (tune for GPU memory)
+      intra_graph_batch_size: 4096
+        # Edges per batch (tune for GPU memory)
   inter_graph_batching:
     used_method: none
 
@@ -72,7 +73,7 @@ training:
       gnn_num_layers: 2
       gnn_dropout: 0.3
       graph_weight: 0.0
-      k: 3.0
+      k: 2.0
       attention_type: linear_focused  # O(n) complexity, suitable for large batches
       power_k: 2
       use_bn: true

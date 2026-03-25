@@ -3,6 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_PIDSMAKER_ROOT="/home/astar/projects"
+DEFAULT_ARTIFACT_DIR="${SCRIPT_DIR}/artifacts"
+DEFAULT_MPLCONFIGDIR="${SCRIPT_DIR}/.cache/matplotlib"
 
 resolve_pidsmaker_dir() {
     if [ -n "${PIDSMAKER_DIR:-}" ]; then
@@ -35,6 +37,9 @@ fi
 CONFIG_SRC="${SCRIPT_DIR}/configs/hyp_pids.yml"
 CONFIG_DST="${PIDSMAKER_DIR}/config/hyp_pids.yml"
 
+mkdir -p "$DEFAULT_MPLCONFIGDIR"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-$DEFAULT_MPLCONFIGDIR}"
+
 # --- Usage ---
 if [ $# -lt 1 ]; then
     echo "Usage: $0 DATASET [extra args...]"
@@ -51,18 +56,40 @@ fi
 DATASET="$1"
 shift
 
+ARTIFACT_DIR="${PIDS_ARTIFACT_DIR:-${PIDSMAKER_ARTIFACT_DIR:-$DEFAULT_ARTIFACT_DIR}}"
+USER_SET_ARTIFACT_DIR=false
+for arg in "$@"; do
+    if [[ "$arg" == --artifact_dir=* ]] || [[ "$arg" == "--artifact_dir" ]]; then
+        USER_SET_ARTIFACT_DIR=true
+        break
+    fi
+done
+
+if [ "$USER_SET_ARTIFACT_DIR" = false ]; then
+    mkdir -p "$ARTIFACT_DIR"
+    export PIDSMAKER_ARTIFACT_DIR="$ARTIFACT_DIR"
+fi
+
 # --- Symlink config into PIDSMaker ---
 if [ -L "$CONFIG_DST" ]; then
     # Already a symlink — update if target changed
     if [ "$(readlink -f "$CONFIG_DST")" != "$(readlink -f "$CONFIG_SRC")" ]; then
-        ln -sf "$CONFIG_SRC" "$CONFIG_DST"
+        if ! ln -sf "$CONFIG_SRC" "$CONFIG_DST"; then
+            echo "[run.sh] Error: failed to update $CONFIG_DST."
+            echo "[run.sh] Ensure ${PIDSMAKER_DIR}/config is writable."
+            exit 1
+        fi
         echo "[run.sh] Updated symlink: $CONFIG_DST -> $CONFIG_SRC"
     fi
 elif [ -e "$CONFIG_DST" ]; then
     echo "[run.sh] Error: $CONFIG_DST exists and is not a symlink. Remove it manually to proceed."
     exit 1
 else
-    ln -s "$CONFIG_SRC" "$CONFIG_DST"
+    if ! ln -s "$CONFIG_SRC" "$CONFIG_DST"; then
+        echo "[run.sh] Error: failed to create $CONFIG_DST."
+        echo "[run.sh] Ensure ${PIDSMAKER_DIR}/config is writable."
+        exit 1
+    fi
     echo "[run.sh] Created symlink: $CONFIG_DST -> $CONFIG_SRC"
 fi
 
@@ -71,4 +98,11 @@ fi
 # (running `python pidsmaker/main.py` puts pidsmaker/ on sys.path, not its parent)
 cd "$PIDSMAKER_DIR"
 export PYTHONPATH="${PIDSMAKER_DIR}:${SCRIPT_DIR}:${PYTHONPATH:-}"
-exec python pidsmaker/main.py hyp_pids "$DATASET" "$@"
+
+CMD=(python -m pidsmaker.main hyp_pids "$DATASET")
+if [ "$USER_SET_ARTIFACT_DIR" = false ]; then
+    CMD+=(--artifact_dir "$ARTIFACT_DIR")
+fi
+CMD+=("$@")
+
+exec "${CMD[@]}"
