@@ -99,6 +99,22 @@ fi
 cd "$PIDSMAKER_DIR"
 export PYTHONPATH="${PIDSMAKER_DIR}:${SCRIPT_DIR}:${PYTHONPATH:-}"
 
+if ! python - <<'PY'
+import traceback
+
+try:
+    import factory_ext  # noqa: F401
+except Exception:
+    traceback.print_exc()
+    raise SystemExit(1)
+PY
+then
+    echo "[run.sh] Error: failed to import hyperbolic extensions."
+    echo "[run.sh] Ensure the current Python environment has the required dependencies."
+    echo "[run.sh] Missing package in this environment: likely geoopt."
+    exit 1
+fi
+
 CMD=(python -m pidsmaker.main hyp_pids "$DATASET")
 if [ "$USER_SET_ARTIFACT_DIR" = false ]; then
     CMD+=(--artifact_dir "$ARTIFACT_DIR")
