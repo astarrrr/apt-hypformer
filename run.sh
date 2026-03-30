@@ -2,7 +2,36 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PIDSMAKER_DIR="/home/astar/projects/PIDSMaker"
+DEFAULT_PIDSMAKER_ROOT="/home/astar/projects"
+
+resolve_pidsmaker_dir() {
+    if [ -n "${PIDSMAKER_DIR:-}" ]; then
+        printf '%s\n' "$PIDSMAKER_DIR"
+        return 0
+    fi
+
+    local candidate
+    for candidate in \
+        "${DEFAULT_PIDSMAKER_ROOT}/PIDSMaker-hyp" \
+        "${DEFAULT_PIDSMAKER_ROOT}/PIDSMaker"
+    do
+        if [ -d "$candidate/config" ] && [ -f "$candidate/pidsmaker/main.py" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+if ! PIDSMAKER_DIR="$(resolve_pidsmaker_dir)"; then
+    echo "[run.sh] Error: could not find PIDSMaker checkout."
+    echo "[run.sh] Set PIDSMAKER_DIR or place the repo at one of:"
+    echo "  ${DEFAULT_PIDSMAKER_ROOT}/PIDSMaker-hyp"
+    echo "  ${DEFAULT_PIDSMAKER_ROOT}/PIDSMaker"
+    exit 1
+fi
+
 CONFIG_SRC="${SCRIPT_DIR}/configs/hyp_pids.yml"
 CONFIG_DST="${PIDSMAKER_DIR}/config/hyp_pids.yml"
 
